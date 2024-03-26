@@ -1,29 +1,30 @@
-import os,requests
-
+import requests
+import settings as st
+from typing import Literal
 url="http://localhost:8011"
 
-usd_path=os.path.abspath('.')+"\\usd"
-audio_path=os.path.abspath('.')+"\\audios"
-export_path=os.path.abspath('.')+"\\export"
 
-audio_name="hello.wav"
 
-def load_usd(usd_name):
-    api="/A2F/USD/Load"
+def load_usd(model):
+    
     
     req_body={
-        # "file_name":usd_path+'/'+usd_name
-        "file_name":"omniverse://localhost/NVIDIA/Assets/Audio2Face/Samples_2023.1/blendshape_solve/claire_solved_arkit.usd"
+        
+        "file_name":model
     }
-    res = requests.post(url+api,json=req_body).json()
-    print(res)
+    
+    
+    res = requests.post(st.LOAD_MODEL_API["Load"],json=req_body).json()
+    
+    
+    return f"response of load model {model} : {res}\n"
+    
 def get_instance()->str:
-    api = "/A2F/Player/GetInstances"
-    res = requests.get(url+api).json()
+    res = requests.get(st.GET_INSTANCE_API["GetInstance"]).json()
     return res.get('result').get('regular')[0]
-def load_audio(player_name,audio_name):
-    api1="/A2F/Player/SetRootPath"
-    api2="/A2F/Player/SetTrack"
+
+def load_audio(player_name,audio_name,audio_path):
+
     
     dict1={
         "a2f_player": player_name,
@@ -33,15 +34,18 @@ def load_audio(player_name,audio_name):
         "a2f_player": player_name,
         "file_name": audio_name
     }
-    res1=requests.post(url+api1,json=dict1).json()
-    res2=requests.post(url+api2,json=dict2).json()
-    print(res1,res2)
     
-def export_blendshape(export_name,fps):
+    res1=requests.post(st.LOAD_AUDIO_API["SetTrackDirectory"],json=dict1).json()
+    res2=requests.post(st.LOAD_AUDIO_API["SetTrack"],json=dict2).json()
+    
+    
+    return f"response of setting sound dir to {audio_path}: {res1}\n"+f"response of upload sound {audio_name} : {res2}\n"
+    
+def export_blendshape(export_path,export_name,export_format:Literal["json","usd"]="json",fps=60,isBatch=False):
     
     def get_solver_node()->str:
-        api="/A2F/Exporter/GetBlendShapeSolvers"
-        res=requests.get(url+api).json()
+        
+        res=requests.get(st.GET_SOLVER_API["GetBSSolver"]).json()
         return res.get('result')[0]
     
     solver_node = get_solver_node()
@@ -50,18 +54,24 @@ def export_blendshape(export_name,fps):
         "solver_node": solver_node,
         "export_directory": export_path,
         "file_name": export_name,
-        "format": "json",
-        "batch": False,
+        "format": export_format,
+        "batch": isBatch,
         "fps": fps
     }    
     api="A2F/Exporter/ExportBlendshapes"
-    res=requests.post(url+'/'+api,json=param).json()
-    print(res)
+    res=requests.post(st.EXPORT_BLENDSHAPE_API["ExportBS"],json=param).json()
     
-if __name__=="__main__":
-    load_usd('claire_solved_arkit.usd')
-    instance_name=get_instance()
-    load_audio(instance_name,audio_name)
+    if res.get('status')=='OK':
+        return f"Successfully export {export_name} to {export_path} as {export_format}!"
     
-    export_blendshape(f"export blendshape {audio_name}",30)
+    return f"response of export BS to {export_path} as {export_format} : {res}\n"
     
+def Audio2face(model,audio_directory,audio_name,FPS,export_format,export_path):
+    
+    res1=load_usd(model)
+    
+    res2=load_audio(get_instance(),audio_name,audio_directory)
+    
+    res3=export_blendshape(export_path,f"{audio_name}",export_format,FPS)    
+
+    return res1+res2+res3
